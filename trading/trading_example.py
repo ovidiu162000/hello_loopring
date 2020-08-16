@@ -16,37 +16,26 @@ loopring_exported_account = {
 }
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Loopring DEX Rest API Trading Example")
-    parser.add_argument("-a", "--action", required=True, choices=['time', 'buy', 'sell', 'cancel'], default='time', help='choose action')
-    parser.add_argument("-m", "--market", default="LRC-USDT", help='specific token market')
-    parser.add_argument("-p", "--price", help='order price')
-    parser.add_argument("-v", "--volume", help='order volume')
-    parser.add_argument("-O", "--orderid", help='order id to be cancelled')
-    parser.add_argument("-H", "--orderhash", help='order hash to be cancelled')
-
-    args = parser.parse_args()
-
+    # Connect the account
     loopring_rest_sample = LoopringRestApiSample()
-    if args.action == "time":
-        srv_time = loopring_rest_sample.query_srv_time()
-        print(f"srv time is {srv_time}")
-    else:
-        loopring_rest_sample.connect(loopring_exported_account)
-        if args.action == "buy":
-            buy_token, sell_token = args.market.split('-')
-            price =  float(args.price)
-            volume = float(args.volume)
-            loopring_rest_sample.buy(buy_token, sell_token, price, volume)
-        elif args.action == "sell":
-            buy_token, sell_token = args.market.split('-')
-            price =  float(args.price)
-            volume = float(args.volume)
-            loopring_rest_sample.sell(buy_token, sell_token, price, volume)
-        elif args.action == "cancel":
-            cancal_params = {}
-            if args.orderhash:
-                cancal_params['orderHash'] = args.orderhash
-            if args.orderid:
-                cancal_params['clientOrderId'] = args.orderid
-            loopring_rest_sample.cancel_order(**cancal_params)
-        sleep(5)
+    loopring_rest_sample.connect(loopring_exported_account)
+
+    # Specify order params
+    pair = "LRC-USDT"
+    base_token, quote_token = pair.split("-")
+    buy = True
+    price = 0.18 # Make sure the price is lower than the current mid price
+    volume = 50 # base_token
+    nr_of_orders_to_create = 3
+
+    # Build orders
+    orders = []
+    for _ in range(nr_of_orders_to_create):
+        order_params = loopring_rest_sample.create_order_params(base_token, quote_token, buy, price, volume)
+        orders.append(order_params)
+
+    loopring_rest_sample.submit_multiple_orders(orders)
+    sleep(5)
+
+
+
