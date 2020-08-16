@@ -261,6 +261,78 @@ class LoopringRestApiSample(RestClient):
             extra=order
         )
 
+    def create_order_params(self, base_token, quote_token, buy, price, volume):
+        # This is a copy of the _order() method, except that it doesn't actually send the request
+        # but it returns the order params as a dictionary
+        if buy:
+            tokenS = self.market_info_map[quote_token]
+            tokenB = self.market_info_map[base_token]
+            amountS = str(int(10 ** tokenS['decimals'] * price * volume))
+            amountB = str(int(10 ** tokenB['decimals'] * volume))
+        else:
+            tokenS = self.market_info_map[base_token]
+            tokenB = self.market_info_map[quote_token]
+            amountS = str(int(10 ** tokenS['decimals'] * volume))
+            amountB = str(int(10 ** tokenB['decimals'] * price * volume))
+
+        tokenSId = tokenS['tokenId']
+        tokenBId = tokenB['tokenId']
+
+        orderId = self.orderId[tokenSId]
+        assert orderId < self.MAX_ORDER_ID
+        self.orderId[tokenSId] += 1
+
+        # make valid time ahead 1 hour
+        validSince = int(time()) - self.time_offset - 3600
+
+        # order base
+        order = {
+            "exchangeId"    : self.exchangeId,
+            "orderId"       : orderId,
+            "accountId"     : self.accountId,
+            "tokenSId"      : tokenSId,
+            "tokenBId"      : tokenBId,
+            "amountS"       : amountS,
+            "amountB"       : amountB,
+            "allOrNone"     : "false",
+            "validSince"    : validSince,
+            "validUntil"    : validSince + 60 * 24 * 60 * 60,
+            "maxFeeBips"    : 50,
+            "label"         : 211,
+            "buy"           : "true" if buy else "false",
+            "clientOrderId" : "SampleOrder" + str(int(time()))
+        }
+
+        order_message = self._serialize_order(order)
+        msgHash = poseidon(order_message, self.order_sign_param)
+        signedMessage = PoseidonEdDSA.sign(msgHash, FQ(int(self.private_key)))
+        # update signaure
+        order.update({
+            "hash"        : str(msgHash),
+            "signatureRx" : str(signedMessage.sig.R.x),
+            "signatureRy" : str(signedMessage.sig.R.y),
+            "signatureS"  : str(signedMessage.sig.s)
+        })
+        return order
+
+    def submit_multiple_orders(self, orders: dict):
+        data = {
+            "security": Security.SIGNED
+        }
+        params = {
+            "orders": orders
+        }
+        self.add_request(
+            method="POST",
+            path="/api/v2/batchOrders",
+            callback=self.on_submit_multiple_orders,
+            params=params,
+            data=data
+        )
+
+    def on_submit_multiple_orders(self, data, request):
+        print(data)
+
     def _serialize_order(self, order):
         return [
             int(order["exchangeId"]),
@@ -274,7 +346,7 @@ class LoopringRestApiSample(RestClient):
             int(order["validSince"]),
             int(order["validUntil"]),
             int(order["maxFeeBips"]),
-            int(order["buy"] == 'true'),            
+            int(order["buy"] == 'true'),
             int(order["label"])
         ]
 
